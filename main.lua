@@ -1,27 +1,6 @@
 require("tetrominoes")
 
 
-scale = 1
-
--- game screen top
-gst = 8
--- tetromino block color (the first non-black pixel in the top-left)
-tbc = {252, 252, 252}
-
--- play field start left
-pfsl = scale * 96
--- play field start top
-pfst = gst + (scale * 40)
-
--- tetromino start left
-tsl = scale * 120
--- tetromino start top
-tst = gst + (scale * 40)
-
--- tetromino block width (width of sub-blocks that make up tetromino)
-tbw = scale * 8
-
-
 -- datacrystal.romhacking.net/wiki/Tetris_(NES):RAM_map
 nes_ram_map = {
 	-- y position of the current tetromino
@@ -32,7 +11,7 @@ nes_ram_map = {
 	pf_tl = 1024
 }
 
-
+-- How tetrominoes are represented in the NES's memory
 tet_id_map = {
 	[0]  = 'T',
 	[1]  = 'T',
@@ -130,19 +109,103 @@ function printPf(pf)
 	end
 end
 
+-- [piece[rotation index]]
+possible_x_range = {
+	["S"] = {
+		{-1, 6},
+		{-1, 7}
+	},
+	["Z"] = {
+		{-1, 6},
+		{-1, 7}
+	},
+	["I"] = {
+		{0, 6},
+		{-2, 7}
+	},
+	["O"] = {
+		{-1, 7}
+	},
+	["J"] = {
+		{-1, 6},
+		{-1, 7},
+		{-1, 6},
+		{-2, 6}
+	},
+	["L"] = {
+		{-1, 6},
+		{-1, 7},
+		{-1, 6},
+		{-2, 6}
+	},
+	["T"] = {
+		{-1, 6},
+		{-1, 7},
+		{-1, 6},
+		{-2, 6}
+	}
+}
+
+function isColliding(pf, tet, piece_x, piece_y)
+	for tet_y = 1, 4 do
+		for tet_x = 1, 4 do
+			x = tet_x + piece_x
+			y = tet_y + piece_y
+
+			if (tet[tet_y]:sub(tet_x, tet_x) ~= " " and
+				 ((x < 1 or x > 10 or y < 1 or y > 20) or pf[y][x] ~= 0) ) then
+				return true
+			end
+		end
+	end
+
+	return false
+end
+
+
+function enumerateMoves(pf, cur_tet)
+	-- {tetronimo name, rotation index, x, y} where the piece isn't overlapping/colliding squares already on the playfield
+	valid_resting_locations = {}
+	-- {tetronimo name, rotation index, x, y} that can be reached via normal game inputs
+	reachable_valid_resting_locations = {}
+		
+
+	for rot_indx, tet_2d_arr in ipairs(tetrominoes[cur_tet]) do
+		r = possible_x_range[cur_tet][rot_indx]
+
+		for x = r[1], r[2] do
+			tet = tetrominoes[cur_tet][rot_indx]
+
+			-- the value we will add/subtract, NOT an index on it's own
+			for y = -2, 19 do
+				-- Checks for "tucks"
+				--
+				-- Number of possible locations without tucks (e.g. when the playfield is empty):
+				--  9 -- O
+				-- 17 -- I
+				-- 17 -- Z, S
+				-- 34 -- L, J, T
+				if (not isColliding(pf, tet, x, y) and isColliding(pf, tet, x, y+1)) then
+					table.insert(valid_resting_locations, {rot_indx, x, 999})
+				end
+			end
+		end
+	end
+
+	return valid_resting_locations
+end
+
 
 function getBestMove(pf, cur_tet)
-	local map = {
-		I = {{'B'},          {'fall'}, {'A'}},
-		T = {{'B', 'left'},  {'fall'}, {'A'}},
-		O = {{'B', 'right'}, {'fall'}, {'A'}},
-		Z = {{'A'},          {'fall'}, {'A'}},
-		S = {{'A', 'left'},  {'fall'}, {'A'}},
-		L = {{'A', 'right'}, {'fall'}, {'A'}},
-		J = {{'A', 'right'}, {'fall'}, {'B'}}
-	}
+	possible_moves = enumerateMoves(pf, cur_tet)
 
-	return map[cur_tet]
+	-- for i, v in ipairs(possible_moves) do
+	-- 	print("rot = " .. v[1] .. ", x = " .. v[2] .. " y = " .. v[3])
+	-- end
+
+	print(#possible_moves)
+
+	return {}
 end
 
 
@@ -199,7 +262,10 @@ falling = false
 -- used to keep track of when a tetromino falls one grid cell
 cur_tet_pre_fall_pf = nil
 
+
 function eachFrame()
+	pf = scanPf()
+
 	spawn_tet = getCurTet()
 	
 	-- new tetromino spawned, update cur_tet and pf
@@ -211,7 +277,6 @@ function eachFrame()
 	-- handle cur_tet (only executes once for each tetromino)
 	if spawn_tet ~= nil and not new_tet_handled then
 		cur_tet = spawn_tet
-		print(cur_tet)
 
 		for i, inp in ipairs(getBestMove(pf, cur_tet)) do
 			table.insert(inp_queue, #inp_queue+1, inp)
@@ -238,5 +303,6 @@ function eachFrame()
 
 	-- frm_count = (frm_count + 1) % frms_between_inps
 end
+
 
 emu.registerafter(eachFrame)
