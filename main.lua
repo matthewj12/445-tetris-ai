@@ -104,9 +104,24 @@ local function getCurrentGravity()
 		[8] =	8,
 		[9] =	6,
 		[10] = 5,
+		[11] = 5,
+		[12] = 5,
 		[13] = 4,
+		[14] = 4,
+		[15] = 4,
 		[16] = 3,
+		[17] = 3,
+		[18] = 3,
 		[19] = 2,
+		[20] = 2,
+		[21] = 2,
+		[22] = 2,
+		[23] = 2,
+		[24] = 2,
+		[25] = 2,
+		[26] = 2,
+		[27] = 2,
+		[28] = 2,
 		[29] = 1
 	}
 	
@@ -163,10 +178,12 @@ local function enumerateMoves(pf, cur_tet)
 	return moves
 end
 
--- refactored from the countHole function. This part of the code is used in multiple functions so to avoid duplicating coe,
--- we need to place it in its own function and call is multiple times. 
--- All this does it turn the playfield into a 2d represenation and returns it. 
-local function identifyPf(the_pf)
+
+-- returns the number of holes in the given playfield
+-- A hole is a gridcell that is "blocked off" or inaccessible from the tetromino spawn location because it's surrounded by blocks and/or the wall(s) of the playfield
+-- TODO: Include in the hole count gridcells that are not completely blocked off yet still can't be filled in by a tetromino. For the purpose of evaluating moves, these two type of holes are identical.
+local function countHoles(the_pf)
+	-- __________________________________ "Flood fill" method for counting holes __________________________________
 	--[[
 		The meaning of the values in pf change after calling fillIn():
 			value | before      | after
@@ -176,87 +193,57 @@ local function identifyPf(the_pf)
 			2     | N/A         | empty space that is not a hole
 	]]
 
-	local pf = d2TblCopy(the_pf)
+	-- local pf = d2TblCopy(the_pf)
 
-	local function fillIn(x, y)
-		if x < 1 or x > 10 or y < 1 or y > 20 or pf[y][x] == 1 or pf[y][x] == 2 then
-			return
-		else
-			pf[y][x] = 2
-			fillIn(x+1, y)
-			fillIn(x-1, y)
-			fillIn(x, y+1)
-			fillIn(x, y-1)
-		end
-	end
+	-- local function fillIn(x, y)
+	-- 	if x < 1 or x > 10 or y < 1 or y > 20 or pf[y][x] == 1 or pf[y][x] == 2 then
+	-- 		return
+	-- 	else
+	-- 		pf[y][x] = 2
+	-- 		fillIn(x+1, y)
+	-- 		fillIn(x-1, y)
+	-- 		fillIn(x, y+1)
+	-- 		fillIn(x, y-1)
+	-- 	end
+	-- end
 
-	-- should work starting from any location within the piece spawning area
-	fillIn(5, 1)
+	-- local holes = 0
 
-	return pf
-end
+	-- -- should work starting from any location within the piece spawning area
+	-- fillIn(5, 1)
 
--- returns the number of holes in the given playfield
--- A hole is a gridcell that is "blocked off" or inaccessible from the tetromino spawn location because it's surrounded by blocks and/or the wall(s) of the playfield
--- TODO: Include in the hole count gridcells that are not completely blocked off yet still can't be filled in by a tetromino. For the purpose of evaluating moves, these two type of holes are identical.
-local function countHoles(the_pf)
-	
-	local holes = 0
-	local pf = identifyPf(the_pf)
+	-- -- Count up the number gridcells that are holes
+	-- for y = 1, 20, 1 do
+	-- 	for x = 1, 10, 1 do
+	-- 		if pf[y][x] == 0 then
+	-- 			holes = holes + 1
+	-- 		end
+	-- 	end
+	-- end
 
-	-- Count up the number gridcells that are holes
-	for y = 1, 20, 1 do
-		for x = 1, 10, 1 do
-			if pf[y][x] == 0 then
-				holes = holes + 1
+	-- return holes
+
+	-- ___________ "Check each column for block(s) above" method for counting holes. It's more primitive than 
+	-- the flood fill method, but it's relevant when if we're not considering tucks or spins. _______________
+	local pf = the_pf
+	local hole_count = 0
+
+	for x = 1, 10 do
+		local block_above = false
+
+		for y = 1, 20 do
+			if pf[y][x] == 1 then
+				block_above = true
+			elseif pf[y][x] == 0 and block_above then
+				hole_count = hole_count + 1
 			end
 		end
 	end
 
-	return holes
+	return hole_count
 end
 
--- this function will check for flatness of the platfield. Starting at the first block identified as an object, it will iterate
--- through the playfield and give a corresponding number to each hole, empty space, and object (similar to the countHole function).
--- Where this is different is that it will increase the flatness rating by one for each space not filled by an object. 
--- holes that cannot be filled will be penalized 5 times the regular rating number. 
--- returns the flatness rating. Perfect score of 0 means completly flat with no holes. Higher the flatness rating, the more uneven it is.
-local function checkFlattness()
-	-- overall flatness score
-	local flatness = 0
-	-- have we seen the first block. We will keep track of the score from there. 
-	local foundFirstBlock = false
-	-- get the 2d representation of the playfield. 
-	local pf = identifyPf(the_pf)
 
-	for y = 1, 20, 1 do
-		-- current flatness of the row we are on. This number needs to be reset everytime we iterate. 
-		-- each rows flatness is independent of the others. We can choose to keep the rows flatness if we want. 
-		-- In this case, we are not keep the flatness of the rows which the user has not placed anything in. 
-		local rowFlatness = 0
-		for x = 1, 10, 1 do
-			-- 0 means its a empty space with a hole. Increase the number by 5 because its weighed more negitivly. 
-			if pf[y][x] == 0 then
-				rowFlatness = rowFlatness + 5
-			end
-			-- empty space; not hole
-			if pf[y][x] == 2 then
-				rowFlatness = rowFlatness + 1
-			end
-			-- block cell. First time block has been seen, so we will mark the boolean operator. 
-			if pf[y][x] == 1 and foundFirstBlock == false then
-				foundFirstBlock = true
-			end
-			-- we have reached the end of the row and the first block has been seen. 
-			-- this means we can start monitoring the flatness. Add the rows flatness the overall number. 
-			-- and keep going. 
-			if y == 20 and foundFirstBlock == true then
-				flatness = flatness + rowFlatness
-			end
-	end
-
-	return flatness
-end
 -- applies the given move for the given tetromino to the given playfield and returns the resulting playfield
 local function applyMove(pf_arg, tet_key, move)
 	local pf = d2TblCopy(pf_arg)
