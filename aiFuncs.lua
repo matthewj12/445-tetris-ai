@@ -196,14 +196,14 @@ function flatness(the_pf)
 	local current_flatness = 0
 	local last_flatness = -1
 
-	-- going backwards starting from the top of the playfield
-	for x = 10, 1, -1 do
+	-- going down starting from the top-left of the playfield (x = 0, y = 0)
+	for x = 1, 10 do
 
-		for y = 20, 1, -1 do
+		for y = 1, 20 do
 			if pf[y][x] == 1 then
 				-- once we get to the first block coming down from the top,
 				-- the current index is basically the height of the current column
-				current_flatness = x
+				current_flatness = y
 				-- break here because we have reach the top of the column where a block can be placed. 
 				break
 			end
@@ -212,7 +212,7 @@ function flatness(the_pf)
 		-- get the abolute difference
 		local diff = math.abs(current_flatness - last_flatness)
 		-- as long as diff is greater than or equal to 3 and last flatness is not -1
-		if diff >= 3 and last_flatness != -1 then
+		if diff >= 3 and last_flatness ~= -1 then
 			-- add the flatness since this abs diff meets our criteria
 			flatness_count = flatness_count + diff
 		end
