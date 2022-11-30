@@ -184,6 +184,35 @@ function enumerateMoves(pf, cur_tet)
 end
 
 
+-- Returns the absolute value of the difference between the highest and lowest columns
+function getLargestHeightDiff(pf)
+	local highest_height = nil
+	local lowest_height = nil
+
+	for x = 1, 10 do
+		local height
+
+		for y = 1, 20 do
+			if pf[y][x] == BLOCK then
+				height = y
+				break
+			end
+
+			height = 21
+		end
+
+		if highest_height == nil or height > highest_height then
+			highest_height = height
+		end
+		if lowest_height == nil or height < lowest_height then
+			lowest_height = height
+		end
+	end
+
+	return highest_height - lowest_height
+end
+
+
 -- returns the flatness number of the current playfield. 
 -- flatness is determined by taking the absolute difference between the current and last column
 -- higher return val = less flat/more jagged
@@ -367,14 +396,22 @@ function generateJoypadStates(move)
 end
 
 
+
+-- scales to a value in the range (0, 1]
+function sig(score)
+	return 1 / (1 + score)
+end
+
+
 -- returns a "score" or "expected value" from 0 to 1 representing how good or desirable the playfield is by looking only at what gridcells are currently filled. A higher value signifies a better playfield.
 function baseCasePfEval(pf)
 	-- print(string.format('holes: %d, jaggedness: %d', countHoles(pf), calcJaggedness(pf)))
 	-- printPf(pf)
-	local holes_score = 1 / (countHoles(pf) + 1)
-	local jagedness_score = 1 / (calcJaggedness(pf) + 1)
+	local height_diff_score = sig(getLargestHeightDiff(pf))
+	local holes_score = sig(countHoles(pf))
+	local jagedness_score = sig(calcJaggedness(pf))
 
-	local overall_score = avgTblVal({1.9 * holes_score, 0.1 * jagedness_score})
+	local overall_score = avgTblVal({0.4*holes_score, 0.4*jagedness_score, 0.4*height_diff_score})
 
 	return overall_score
 end
@@ -407,42 +444,72 @@ function atLeast4FullRows(pf_arg)
 end
 
 
+
+function s(a, b)
+	return a.expected_val > b.expected_val
+end
+
+
 -- Calculates the expected value/score of each possible move and then returns one(s) with the highest expected value.
 function getBestMove(pf, cur_tet, cur_depth, max_depth, debug, frames_to_decide)
 	local all_moves = enumerateMoves(pf, cur_tet)
 
 	if debug then
-		-- print(generateIndentation(cur_depth) .. 'getBestMove cur_tet = ' .. cur_tet .. ', cur_depth = ' .. cur_depth)
+		-- print(generateIndentation(cur_depth) .. 'getBestMove cur_tet = ' .. cur_tet .. ', cur_depth = ' .. cur_depth, 'max_depth = ' .. max_depth)
+	end
+
+	-- base case expected vals
+	local bc_expected_vals = {}
+	-- Remove all but the best 5 moves from all_moves
+	for i = 1, #all_moves do
+		local temp_pf = applyMove(pf, cur_tet, all_moves[i], BLOCK)
+
+		table.insert(bc_expected_vals, {indx = i, expected_val = baseCasePfEval(temp_pf)})
+	end
+
+	-- The key will serve as the index of the move in the original all_moves table
+	table.sort(bc_expected_vals, s)
+
+	local moves_indxs_to_consider = {}
+	-- Iterate over the 5 best moves
+	for i = 1, 5 do
+		table.insert(moves_indxs_to_consider, bc_expected_vals[i].indx)
+	end
+
+	for i = 1, #all_moves do
+		table.insert(moves_indxs_to_consider, i)
 	end
 
 	-- move(s) with the highest expected value. If it contains more than one move, then they must necessarily all have exactly the same score. In other words, if there's more than one "best move", it's because they're all tied for first place.
 	local best_moves = {}
 
 	for i = 1, #all_moves do
-		local temp_pf = applyMove(pf, cur_tet, all_moves[i], 1)
-		local cur_expected_val
+		if moves_indxs_to_consider[i] ~= nil then
+			local temp_pf = applyMove(pf, cur_tet, all_moves[i], BLOCK)
+			local cur_expected_val
 
-		if cur_depth == max_depth then
-			-- print('hit base case')
-			cur_expected_val = baseCasePfEval(temp_pf)
-		else
 			-- cur_depth is incremented in recursivePfEval.
-			cur_expected_val = recursivePfEval(temp_pf, cur_tet, cur_depth, max_depth, false, frames_to_decide)
-		end
+			if cur_depth == max_depth then
+				cur_expected_val = baseCasePfEval(temp_pf)
+			else
+				cur_expected_val = recursivePfEval(temp_pf, cur_tet, cur_depth, max_depth, false, frames_to_decide)
+			end
 
-		-- if debug then
-			-- print(string.format('x = %d, r = %d  |  %s', all_moves[i].x, all_moves[i].rot_indx, truncateNum(cur_expected_val, 1)))
-			-- printPf(temp_pf)
-		-- end
+			if debug then
+				-- print(string.format('x = %d, r = %d  |  %s', all_moves[i].x, all_moves[i].rot_indx, tostring(truncateNum(cur_expected_val, 1))))
+				-- print(cur_expected_val)
+				-- printPf(temp_pf)
+			end
 
-		-- If this is the first iteration OR we find a better move
-		if #best_moves == 0 or cur_expected_val > best_moves[1].expected_val then
-			-- move_index refers to the move's index in all_moves
-			best_moves = {{move_index = i, expected_val = cur_expected_val}}
+			-- If this is the first iteration OR we find a better move
+			if #best_moves == 0 or cur_expected_val > best_moves[1].expected_val then
+				-- move_index refers to the move's index in all_moves
+				best_moves = {{move_index = i, expected_val = cur_expected_val}}
 
-		-- If we find a move that's just as good as the current best move(s)
-		elseif cur_expected_val == best_moves[1].expected_val then
-			table.insert(best_moves, {move_index = i, expected_val = cur_expected_val})
+			-- If we find a move that's just as good as the current best move(s)
+			elseif cur_expected_val == best_moves[1].expected_val then
+				table.insert(best_moves, {move_index = i, expected_val = cur_expected_val})
+			end
 		end
 	end
 
@@ -464,15 +531,22 @@ function getBestMove(pf, cur_tet, cur_depth, max_depth, debug, frames_to_decide)
 end
 
 
+local function readCurFrameFromFile()
+	for line in io.lines(CUR_FRAME_FILE) do
+		return tonumber(line)
+	end
+end
+
+
 -- returns a "score" or "expected value" from 0 to 1 representing how good or desirable the playfield is by calculating the best move(s) for each of the 7 tetrominos and then recursively evaluating the resulting playfield. A higher value signifies a more desirable playfield.
 function recursivePfEval(pf, prev_tet, cur_depth, max_depth, debug, frames_to_decide)
 	if debug then
-		-- print(generateIndentation(cur_depth) .. 'recursivePfEval depth = ' .. cur_depth)
+		print(generateIndentation(cur_depth) .. 'recursivePfEval depth = ' .. cur_depth)
 	end
 
 	if cur_depth == max_depth then
 		if debug then
-			-- print(generateIndentation(cur_depth+1) .. '*hits base case*')
+			print(generateIndentation(cur_depth+1) .. '*hits base case*')
 		end
 		return baseCasePfEval(pf)
 	end
@@ -484,7 +558,7 @@ function recursivePfEval(pf, prev_tet, cur_depth, max_depth, debug, frames_to_de
 
 	for i = 1, #tet_keys do
 		-- To save on compuation and avoid "recursion inside of recursion", only consider where each of the 7 tetrominoes would be placed according to baseCasePfEval()
-		local best_move = getBestMove(pf, tet_keys[i], max_depth, max_depth, debug)
+		local best_move = getBestMove(pf, tet_keys[i], max_depth, max_depth, debug, frames_to_decide)
 		-- TODO: consider several of the best moves according to baseCasePfEval() rather than just one (for example: the top 3 best moves, all of the moves that have an expected value > 0.8, etc.)
 
 		local temp_pf = applyMove(pf, tet_keys[i], best_move, 1)
@@ -492,16 +566,18 @@ function recursivePfEval(pf, prev_tet, cur_depth, max_depth, debug, frames_to_de
 
 
 		local e
-		
 		-- cur_frm is declared in globals.lua
 		-- print(string.format('cur_frm: %s, frames_to_decide: %s', cur_frm, frames_to_decide))
 
-		-- if cur_frm < frames_to_decide then
-			recursivePfEval(temp_pf, tet_keys[i], cur_depth+1, max_depth, debug, frames_to_decide)
-		-- else
+		local cur_frame = readCurFrameFromFile()
+
+		if cur_frame < frames_to_decide then
+			e = recursivePfEval(temp_pf, tet_keys[i], cur_depth+1, max_depth, debug, frames_to_decide)
+		else
+			print('recursion terminated early')
 			-- terminate the recursive evaluation early if there's not enough time to go deeper
-			-- return baseCasePfEval(temp_pf)
-		-- end
+			return baseCasePfEval(temp_pf)
+		end
 
 		expected_vals[tet_keys[i]] = e
 

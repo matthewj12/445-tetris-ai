@@ -38,8 +38,8 @@ while cur_tet == nil or next_tet == nil or cur_move == nil or pf == nil or frame
 	next_tet = readSingleLineFile(NEXT_TET_FILE)
 	cur_move = readMoveFromFile(MOVE_FILE)
 	pf = readPfFromFile(PF_STATE_FILE)
-	-- frames_to_decide = readSingleLineFile(FRAMES_TO_DECIDE_FILE);
-	frames_to_decide = 1000
+	frames_to_decide = readSingleLineFile(FRAMES_TO_DECIDE_FILE);
+	-- frames_to_decide = 1000
 end
 
 -- We're "looking ahead" by applying the move that's currently in-progress
@@ -52,7 +52,8 @@ pf = applyMove(pf, cur_tet, cur_move, BLOCK)
 -- print()
 
 -- The - 20 is to account for the overhead of the unwinding of the recursion
-local best_move = getBestMove(pf, next_tet, 0, 0, false, frames_to_decide - 20)
+local best_move = getBestMove(pf, next_tet, 0, MAX_RECURSION_DEPTH, false, frames_to_decide - 20)
+-- local best_move = {x=1, rot_indx=1}
 
 local file = io.open(MOVE_FILE, 'w')
 io.output(file)

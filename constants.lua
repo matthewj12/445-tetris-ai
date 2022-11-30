@@ -2,8 +2,11 @@
 START_X = 4
 START_Y = -1
 -- number of frames to hold a buttons down/up
-BTN_DOWN_FRMS = 1
-BTN_UP_FRMS = 1
+BTN_DOWN_FRMS = 2
+BTN_UP_FRMS = 2
+
+-- 0 = no recursion
+MAX_RECURSION_DEPTH = 1
 
 EMPTY = 0
 BLOCK = 1

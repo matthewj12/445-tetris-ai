@@ -62,7 +62,10 @@ local function updateFiles(pf, cur_tet, next_tet, move)
 	io.output(file)
 	io.write(next_tet)
 	io.close()
+end
 
+
+local function updateTetFlagFile()
 	-- Let the main program know that there's a new tetromino to determine a best move for
 	local file = io.open(TET_FLAG_FILE, 'w')
 	io.output(file)
@@ -145,7 +148,7 @@ local function main()
 				joypad_states = generateJoypadStates(best_move)
 
 				updateFiles(pf, cur_tet, getNextTet(), best_move)
-
+				updateTetFlagFile()
 			end
 
 			-- Update the joypad state when the correct time/frame comes
