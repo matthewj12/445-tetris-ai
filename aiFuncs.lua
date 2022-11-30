@@ -50,6 +50,8 @@ end
 
 -- returns whether the given tetromino in the given position and rotation overlapps with blocks currently on the playfield
 function isColliding(pf, tet_key, rot_indx, piece_x, piece_y)
+	-- print('tet key: ' .. tet_key)
+	-- print('rot_indx: ' .. rot_indx)
 	local tet_2D_array = tetrominoes[tet_key][rot_indx]
 
 	for tet_y = 1, 4 do
@@ -58,7 +60,7 @@ function isColliding(pf, tet_key, rot_indx, piece_x, piece_y)
 			x = tet_x + piece_x - 1
 			y = tet_y + piece_y - 1
 
-			if y >= 1 and (tet_2D_array[tet_y][tet_x] == 1 and (y > 20 or pf[y][x] == 1)) then
+			if y >= 1 and (tet_2D_array[tet_y][tet_x] == 1 and (y > 20 or x < 1 or x > 10 or pf[y][x] == 1)) then
 				return true
 			end
 		end
@@ -158,13 +160,14 @@ function enumerateMoves(pf, cur_tet)
 	-- The minimum and maximum x positions that each piece can be at without going off the playfield
 	local possible_x_ranges = {
 		-- Lua is 1-indexed, so 1 represents the leftmost playfield column
-		["S"] = {{0, 7}, {-1, 7}},
-		["Z"] = {{0, 7}, {-1, 7}},
-		["I"] = {{1, 7}, {-1, 8}},
-		["O"] = {{0, 8}},
-		["J"] = {{0, 7}, {0, 8}, {0, 7}, {-1, 7}},
-		["L"] = {{0, 7},{0, 8},{0, 7},{-1, 7}},
-		["T"] = {{0, 7},{0, 8},{0, 7},{-1, 7}}
+		-- These ranges leave the rightmost column open (for getting tetrises)
+		["S"] = {{0, 6}, {-1, 6}},
+		["Z"] = {{0, 6}, {-1, 6}},
+		["I"] = {{1, 6}, {-1, 7}},
+		["O"] = {{0, 7}},
+		["J"] = {{0, 6}, {0, 7}, {0, 6}, {-1, 6}},
+		["L"] = {{0, 6}, {0, 7}, {0, 6}, {-1, 6}},
+		["T"] = {{0, 6}, {0, 7}, {0, 6}, {-1, 6}}
 	}
 
 	local moves = {}
@@ -228,19 +231,38 @@ end
 
 
 
--- returns the number of holes in the given playfield
--- As of this commit, a "hole" is simply an empty grid cell with block(s) above it in the same column. Although it's very much possible and often optimal to place pieces in such as way that they would be counted as "holes" by this definition but then fill them in later via a "tuck" and/or "spin", the code currently counts "holes" this way for the sake of simplicity, ignoring tucks and spins.
-function countHoles(the_pf)
-	local pf = the_pf
+function markEachGridcelType(the_pf)
+	local pf = d2TblCopy(the_pf)
 	local hole_count = 0
 
 	for x = 1, 10 do
 		local block_above = false
 
 		for y = 1, 20 do
-			if pf[y][x] == 1 then
+			if pf[y][x] == BLOCK then
 				block_above = true
-			elseif pf[y][x] == 0 and block_above then
+			elseif pf[y][x] == EMPTY and block_above then
+				pf[y][x] = HOLE
+			end
+		end
+	end
+
+	return pf
+end
+
+
+-- returns the number of holes in the given playfield
+-- As of this commit, a "hole" is simply an empty grid cell with block(s) above it in the same column. Although it's very much possible and often optimal to place pieces in such as way that they would be counted as "holes" by this definition but then fill them in later via a "tuck" and/or "spin", the code currently counts "holes" this way for the sake of simplicity, ignoring tucks and spins.
+function countHoles(pf)
+	local hole_count = 0
+
+	for x = 1, 10 do
+		local block_above = false
+
+		for y = 1, 20 do
+			if pf[y][x] == BLOCK then
+				block_above = true
+			elseif pf[y][x] == EMPTY and block_above then
 				hole_count = hole_count + 1
 			end
 		end
@@ -358,6 +380,33 @@ function baseCasePfEval(pf)
 end
 
 
+function atLeast4FullRows(pf_arg)
+	local pf = d2TblCopy(pf_arg)
+	pf = markEachGridcelType(pf)
+
+	local full_row_count = 0
+
+	for y = 20, 1, -1 do
+		if pf[y][10] == EMPTY then
+			local a = true
+
+			for x = 1, 9 do
+				-- holes count towards the gridcell being filled in
+				if pf[y][x] ~= BLOCK and pf[y][x] ~= HOLE then
+					a = false
+				end
+			end
+
+			if a then
+				full_row_count = full_row_count + 1
+			end
+		end
+	end
+
+	return full_row_count >= 4
+end
+
+
 -- Calculates the expected value/score of each possible move and then returns one(s) with the highest expected value.
 function getBestMove(pf, cur_tet, cur_depth, max_depth, debug, frames_to_decide)
 	local all_moves = enumerateMoves(pf, cur_tet)
@@ -368,8 +417,6 @@ function getBestMove(pf, cur_tet, cur_depth, max_depth, debug, frames_to_decide)
 
 	-- move(s) with the highest expected value. If it contains more than one move, then they must necessarily all have exactly the same score. In other words, if there's more than one "best move", it's because they're all tied for first place.
 	local best_moves = {}
-
-	-- print('cur_tet: ' .. cur_tet)
 
 	for i = 1, #all_moves do
 		local temp_pf = applyMove(pf, cur_tet, all_moves[i], 1)
@@ -400,6 +447,11 @@ function getBestMove(pf, cur_tet, cur_depth, max_depth, debug, frames_to_decide)
 	end
 
 	-- print()
+
+	-- If we can clear 4 lines at once, then that's the best move
+	if cur_tet == 'I' and atLeast4FullRows(pf) then
+		return {x = 8, rot_indx = 2}
+	end
 
 	-- Alternatively, we can randomly select a move index from best_moves
 	local i = 1

@@ -39,7 +39,7 @@ while cur_tet == nil or next_tet == nil or cur_move == nil or pf == nil or frame
 	cur_move = readMoveFromFile(MOVE_FILE)
 	pf = readPfFromFile(PF_STATE_FILE)
 	-- frames_to_decide = readSingleLineFile(FRAMES_TO_DECIDE_FILE);
-	frames_to_decide = 30
+	frames_to_decide = 1000
 end
 
 -- We're "looking ahead" by applying the move that's currently in-progress

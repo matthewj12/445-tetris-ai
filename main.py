@@ -3,6 +3,7 @@ import time, threading, os
 
 NEW_TET_TO_PROCESS = '1'
 NO_TET_TO_PROCESS = '0'
+
 TET_FLAG_FILE = 'new_tet_flag.txt'
 FRAMES_TO_DECIDE_FILE = 'frames_to_decide.txt'
 
@@ -14,6 +15,8 @@ def readSingleLineFile(file_name):
 			return line
 
 
+with open(NEW_TET_TO_PROCESS, 'w') as file:
+	file.write('0')
 
 while True:
 	tet_flag = readSingleLineFile(TET_FLAG_FILE)
@@ -23,7 +26,7 @@ while True:
 		while readSingleLineFile('next_tet.txt') == None:
 			time.sleep(0.001)
 
-		# print(readSingleLineFile('next_tet.txt'))
+		print(readSingleLineFile('next_tet.txt'))
 
 		os.system('lua callGetBestMove.lua')
 		

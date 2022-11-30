@@ -1,3 +1,15 @@
+-- returns true if all the values in both arrays are equal
+function d1TblsEq(a, b)
+	for i = 1, #a do
+		if a[i] ~= b[i] then
+			return false
+		end
+	end
+
+	return true
+end
+
+
 -- Returns a deep copy of the given 1-dimensional table/array
 function d1TblCopy(orig_tbl)
 	local new_tbl = {}

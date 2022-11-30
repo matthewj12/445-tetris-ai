@@ -51,7 +51,7 @@ end
 
 local function updateFiles(pf, cur_tet, next_tet, move)
 	updatePfFile(pf)
-	updateFramesToDecideFile(pf, cur_tet, move)
+	-- updateFramesToDecideFile(pf, cur_tet, move)
 
 	file = io.open(CUR_TET_FILE, 'w')
 	io.output(file)
@@ -61,11 +61,6 @@ local function updateFiles(pf, cur_tet, next_tet, move)
 	file = io.open(NEXT_TET_FILE, 'w')
 	io.output(file)
 	io.write(next_tet)
-	io.close()
-
-	file = io.open(GRAV_FILE, 'w')
-	io.output(file)
-	io.write(getCurrentGravity())
 	io.close()
 
 	-- Let the main program know that there's a new tetromino to determine a best move for
@@ -115,10 +110,14 @@ local function main()
 			cur_frame = 1
 			best_move = OPENING_MOVES[cur_tet]
 
-			updateFiles(pf, cur_tet, next_tet, best_move)
 			writeMoveToFile(best_move)
+			updateFiles(pf, cur_tet, next_tet, best_move)
 
 			game_started = true
+			t0 = os.clock()
+			while (os.clock() - t0 < 0.1) do
+			end
+
 		end
 
 		if game_started then
